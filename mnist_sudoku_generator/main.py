@@ -62,7 +62,7 @@ def create_board(puzzle_arr, empty_board):
 
 base = create_empty_board()
 
-for i in tqdm(range(1000)):
+for i in tqdm(range(1)):
   seed = np.random.randint(0, sys.maxsize)
   puzzle = Sudoku(3, seed=seed).difficulty(0.5)
   solution = puzzle.solve()
