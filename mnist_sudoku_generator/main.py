@@ -60,6 +60,37 @@ def create_board(puzzle_arr, empty_board):
         empty_board[left:right, top:bottom] = img_gray_array
   return Image.fromarray(empty_board)
 
+def create_image_arr(puzzle_board):
+  img_arr = np.empty((9, 9), dtype=object)
+  for i in range(9):
+    for j in range(9):
+      num = puzzle_board[i][j]
+      if num is not None:
+        num_img = get_number_img(num)
+        cmap = cm.get_cmap('gray')
+        img_gray_array = cmap(num_img/255)
+        img_gray_array = (img_gray_array[..., 0] * 255).astype(np.uint8)
+        img_arr[i][j] = img_gray_array
+      else:
+        img_arr[i][j] = None
+  return img_arr
+
+def generate_sudoku_images(num_boards):
+  for i in tqdm(range(num_boards)):
+    seed = np.random.randint(0, sys.maxsize)
+    puzzle = Sudoku(3, seed=seed).difficulty(0.5)
+    solution = puzzle.solve()
+    np.save(f'dataset/arrays/puzzles/board_{i}.npy', puzzle.board)
+    np.save(f'dataset/arrays/solutions/board_{i}.npy', solution.board)
+    
+    puzzle_img_arr = create_image_arr(puzzle.board)
+    solution_img_arr = create_image_arr(solution.board)
+    np.save(f'dataset/images/puzzles/board_{i}.npy', puzzle_img_arr)
+    np.save(f'dataset/images/solutions/board_{i}.npy', solution_img_arr)
+
+generate_sudoku_images(10000)
+
+''' For generating full images with numbers
 base = create_empty_board()
 
 for i in tqdm(range(1)):
@@ -72,3 +103,4 @@ for i in tqdm(range(1)):
   solution_img.save(f'dataset/images/solutions/board_{i}.png')
   np.save(f'dataset/arrays/puzzles/board_{i}.npy', puzzle.board)
   np.save(f'dataset/arrays/solutions/board_{i}.npy', solution.board)
+'''
