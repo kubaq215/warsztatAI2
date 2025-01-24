@@ -38,7 +38,7 @@ class MNIST_SudokuNet(nn.Module):
         return x
 
 class SudokuPuzzleDataset(Dataset):
-    def __init__(self, subset: str, puzzle_path: str):
+    def __init__(self, subset: str, puzzle_path: str, solution_path: str):
         self.subset = subset
         self.puzzle_files = sorted([f for f in os.listdir(puzzle_path) if f.endswith('.npy')])
         self.puzzles = []
@@ -52,6 +52,12 @@ class SudokuPuzzleDataset(Dataset):
                     if puzzle[i][j] is not None:
                         puzzle[i][j] = puzzle[i][j].astype(np.float32)/255.0
             self.puzzles.append(puzzle)
+
+        self.solution_files = sorted(f for f in os.listdir(solution_path) if f.endswith('.npy'))
+        self.solutions = []
+        for fn in self.solution_files:
+            solution = np.load(os.path.join(solution_path, fn), allow_pickle=True)
+            self.solutions.append(solution)
 
     def __len__(self):
         return len(self.puzzles)
@@ -73,18 +79,9 @@ class SudokuPuzzleDataset(Dataset):
         return torch.tensor(cell).unsqueeze(0)  # 1×28×28
 
     def to_query(self, index: int) -> Query:
-        """
-        Construct a query puzzle_solve(...) for the entire 9×9 puzzle.
-        We'll produce a 9×9 list-of-lists:
-          - If puzzle[i][j] is None => use Constant('none')
-          - Else => Term('tensor', Term(self.subset, Constant(unique_id)))
-        """
         puzzle = self.puzzles[index]
         # We'll create 9 rows of terms
         row_list_terms = []
-        
-        cell_id_start = index * 81  # or any unique numbering
-        current_id = cell_id_start
 
         for i in range(9):
             col_terms = []
@@ -94,8 +91,10 @@ class SudokuPuzzleDataset(Dataset):
                     col_terms.append(Constant('none'))
                 else:
                     # A reference to the network input
-                    col_terms.append(Term("tensor", Term(self.subset, Constant(index), Constant(i), Constant(j))))
-                    current_id += 1
+                    image_term = Term("tensor", Term(self.subset, Constant(index), Constant(i), Constant(j)))
+                    label = Constant(self.solutions[index][i][j])
+                    col_terms.append(Term("digit", image_term, label))
+
             row_list_terms.append(list2term(col_terms))
 
         # puzzle_solve( [[...],[...],...] )
@@ -122,10 +121,5 @@ model.set_engine(ExactEngine(model))
 train_data = SudokuPuzzleDataset("train", "../../mnist_sudoku_generator/dataset/images/puzzles/train")
 model.add_tensor_source("train", train_data)
 
-# If you have labeled cells (supervised approach):
-#   You'd define something like SudokuCellDataset for labeled digit training 
-#   with queries digit(tensor(...), label). Then do train_model(...).
-
-# For puzzle-level training or inference (unsupervised?), you can do:
 loader = DataLoader(train_data, batch_size=1, shuffle=False)
 train_model(model, loader, 1, log_iter=1)
